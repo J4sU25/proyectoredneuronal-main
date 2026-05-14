@@ -1,0 +1,28 @@
+{
+  "total_parameters": 55050,
+  "weight_matrices": [
+    [
+      784,
+      64
+    ],
+    [
+      64,
+      64
+    ],
+    [
+      64,
+      10
+    ]
+  ],
+  "batches_per_epoch": 32,
+  "forward_cost_per_batch": 1757184,
+  "backward_cost_per_batch": 2635776.0,
+  "cost_per_epoch": 140574720.0,
+  "total_time_operations": 702873600.0,
+  "time_complexity_notation": "O(5 * 32 * B * (sum(I_i * O_i))) = O(702873600.0)",
+  "params_space": 110100,
+  "activation_space": 25088,
+  "cache_space": 25088,
+  "total_space_complexity": 160276,
+  "space_complexity_notation": "O(sum(I_i * O_i) + B * max(I_i)) = O(160276)"
+}
