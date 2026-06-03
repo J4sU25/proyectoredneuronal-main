@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-ANALIZADOR DE ALGORITMOS
+ANALISIS DE ALGORITMOS
 ========================
 Reemplace el código dentro de def mi_algoritmo(lista):
 Luego ejecute: python mi_codigo.py

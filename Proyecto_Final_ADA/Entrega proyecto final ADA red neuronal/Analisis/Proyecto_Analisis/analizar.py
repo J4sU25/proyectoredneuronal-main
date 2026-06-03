@@ -1,6 +1,6 @@
 """
 ANALIZADOR AUTOMÁTICO DE ALGORITMOS CON RED NEURONAL
-Solo copia y pega tu algoritmo, el sistema hace todo automáticamente
+Por Favor coloque su algoritmo para hacer evaluado
 """
 
 import os
