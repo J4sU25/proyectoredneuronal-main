@@ -279,7 +279,7 @@ def analyze_convergence(results):
 def main():
     """Funcion principal"""
     
-    print_header("RED NEURONAL co- ANALISIS DE COMPLEJIDAD Y ENTRENAMIENTO CONTINUO")
+    print_header("RED NEURONAL - ANALISIS DE COMPLEJIDAD Y ENTRENAMIENTO CONTINUO")
     
     # Configuracion
     EPOCHS_PER_RUN = 100  # 100 epocas para mejor entrenamiento
