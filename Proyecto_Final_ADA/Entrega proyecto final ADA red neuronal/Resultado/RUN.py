@@ -14,7 +14,7 @@ print("  ENTRENAMIENTO DE EPOCAS (RED NEURONAL)")
 print("="*100 + "\n")
 
 try:
-    ruta1 = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'proyecto ADA epocas', 'proyecto final ADA 1.0'))
+    ruta1 = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Epocas', 'Entrenamiento_ADA 1.0'))
     os.chdir(ruta1)
     if ruta1 not in sys.path:
         sys.path.insert(0, ruta1)
@@ -34,7 +34,7 @@ print("  ANALISIS DE CODIGO (RED NEURONAL)")
 print("="*100 + "\n")
 
 try:
-    ruta2 = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'proyecto ADA analiz', 'proyecto ADA anal'))
+    ruta2 = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'Analisis', 'Proyecto_Analisis'))
     os.chdir(ruta2)
     
     if ruta2 not in sys.path:
