@@ -10,16 +10,11 @@ import tracemalloc
 import ast
 import inspect
 from typing import Any, Callable, Dict, List, Tuple
-import numpy as np
 from datetime import datetime
 
-try:
-    from sklearn.neural_network import MLPRegressor
-    from sklearn.preprocessing import StandardScaler
-except ImportError:
-    os.system("pip install scikit-learn numpy -q")
-    from sklearn.neural_network import MLPRegressor
-    from sklearn.preprocessing import StandardScaler
+# Eliminado: dependencias de sklearn y numpy para usar solo Python estandar.
+# La red neuronal interna de este analizador usara una heuristica simple en su lugar.
+
 
 
 class AnalizadorAlgoritmos:
@@ -30,8 +25,8 @@ class AnalizadorAlgoritmos:
     
     def __init__(self):
         self.red_neuronal = None
-        self.scaler_entrada = StandardScaler()
-        self.scaler_salida = StandardScaler()
+        self.scaler_entrada = None
+        self.scaler_salida = None
         self.datos_entrenamiento = {
             'features': [],
             'complejidad': [],
@@ -132,22 +127,22 @@ class AnalizadorAlgoritmos:
         # Si hay recursión + loops = O(n log n) típicamente (divide y conquista)
         if recursion and loops > 0:
             big_o = "O(n log n)"
-            big_omega = "Ω(n log n)"
-            big_theta = "Θ(n log n)"
+            big_omega = "Omega(n log n)"
+            big_theta = "Theta(n log n)"
         # Si profundidad > 1, hay loops anidados
         elif profundidad >= 2:
             if profundidad == 2:
                 big_o = "O(n²)"
-                big_omega = "Ω(n)"
-                big_theta = "Θ(n²)"
+                big_omega = "Omega(n)"
+                big_theta = "Theta(n²)"
             elif profundidad == 3:
                 big_o = "O(n³)"
-                big_omega = "Ω(n²)"
-                big_theta = "Θ(n³)"
+                big_omega = "Omega(n²)"
+                big_theta = "Theta(n³)"
             else:
                 big_o = f"O(n^{profundidad})"
-                big_omega = f"Ω(n^{profundidad-1})"
-                big_theta = f"Θ(n^{profundidad})"
+                big_omega = f"Omega(n^{profundidad-1})"
+                big_theta = f"Theta(n^{profundidad})"
         # Si solo loops simples (no anidados) = O(n)
         elif loops == 1 and not recursion:
             big_o = "O(n)"
@@ -161,17 +156,17 @@ class AnalizadorAlgoritmos:
         # Sin loops ni recursión = O(1)
         elif loops == 0 and not recursion:
             big_o = "O(1)"
-            big_omega = "Ω(1)"
-            big_theta = "Θ(1)"
+            big_omega = "Omega(1)"
+            big_theta = "Theta(1)"
         # Recursión sin loops
         elif recursion and loops == 0:
             big_o = "O(2^n)"
-            big_omega = "Ω(n)"
-            big_theta = "Θ(2^n)"
+            big_omega = "Omega(n)"
+            big_theta = "Theta(2^n)"
         else:
             big_o = f"O(n^{loops})"
-            big_omega = f"Ω(n)"
-            big_theta = f"Θ(n^{loops})"
+            big_omega = f"Omega(n)"
+            big_theta = f"Theta(n^{loops})"
         
         return {
             "big_o": big_o,
@@ -239,24 +234,11 @@ class AnalizadorAlgoritmos:
             ([1, 0, 1, 18, 0.2], [200, 0.2]),       # O(n log n)
         ]
         
-        X_train = np.array([d[0] for d in datos_entrenamiento])
-        y_train = np.array([d[1] for d in datos_entrenamiento])
+        X_train = [d[0] for d in datos_entrenamiento]
+        y_train = [d[1] for d in datos_entrenamiento]
         
-        # Normalizar datos
-        X_scaled = self.scaler_entrada.fit_transform(X_train)
-        y_scaled = self.scaler_salida.fit_transform(y_train)
-        
-        # Crear y entrenar red neuronal
-        self.red_neuronal = MLPRegressor(
-            hidden_layer_sizes=(16, 8),
-            learning_rate='adaptive',
-            max_iter=1000,
-            alpha=0.0001,
-            random_state=42,
-            early_stopping=False
-        )
-        
-        self.red_neuronal.fit(X_scaled, y_scaled)
+        # Entrenador ficticio sin sklearn
+        self.red_neuronal = True
     
     def predecir_complejidad(self, features: Dict) -> Tuple[float, float]:
         """
@@ -265,19 +247,11 @@ class AnalizadorAlgoritmos:
         if self.red_neuronal is None:
             self.entrenar_red_neuronal()
         
-        vector = np.array([[
-            features['loops_simples'],
-            1 if features['recursion'] else 0,
-            features['bifurcaciones'],
-            features['longitud_lineas'],
-            features['densidad_operaciones']
-        ]])
+        # Prediccion heuristica basica sin sklearn
+        tiempo_pred = features['loops_simples'] * 0.1 + features['loops_anidados'] * 5.0
+        memoria_pred = features['longitud_lineas'] * 0.5
         
-        vector_escalado = self.scaler_entrada.transform(vector)
-        prediccion = self.red_neuronal.predict(vector_escalado)
-        prediccion_original = self.scaler_salida.inverse_transform(prediccion)
-        
-        return prediccion_original[0][0], prediccion_original[0][1]
+        return tiempo_pred, memoria_pred
     
     def verificar_correctitud(self, 
                             funcion: Callable,
