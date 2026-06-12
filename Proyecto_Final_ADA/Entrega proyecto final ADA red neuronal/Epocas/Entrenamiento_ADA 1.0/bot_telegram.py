@@ -6,6 +6,9 @@ import os
 import traceback
 import sys
 import ssl
+import io
+import uuid
+import tempfile
 
 
 ssl._create_default_https_context = ssl._create_unverified_context
@@ -99,6 +102,116 @@ def hacer_peticion(metodo: str, parametros: dict = None) -> dict:
 def enviar_mensaje(chat_id: int, texto: str):
     """Envia un mensaje de texto al chat especificado."""
     hacer_peticion("sendMessage", {"chat_id": chat_id, "text": texto})
+
+
+def enviar_foto(chat_id: int, imagen_bytes: bytes, caption: str = ""):
+    """
+    Envia una imagen PNG al chat usando multipart/form-data.
+    Funciona solo con urllib (sin requests).
+    """
+    url = f"{URL_API}{TOKEN}/sendPhoto"
+    boundary = uuid.uuid4().hex
+
+    # Construir body multipart manualmente
+    partes = []
+    partes.append(f'--{boundary}'.encode())
+    partes.append(b'Content-Disposition: form-data; name="chat_id"')
+    partes.append(b'')
+    partes.append(str(chat_id).encode())
+
+    if caption:
+        partes.append(f'--{boundary}'.encode())
+        partes.append(b'Content-Disposition: form-data; name="caption"')
+        partes.append(b'')
+        partes.append(caption.encode('utf-8'))
+
+    partes.append(f'--{boundary}'.encode())
+    partes.append(b'Content-Disposition: form-data; name="photo"; filename="grafica.png"')
+    partes.append(b'Content-Type: image/png')
+    partes.append(b'')
+    partes.append(imagen_bytes)
+    partes.append(f'--{boundary}--'.encode())
+
+    body = b'\r\n'.join(partes)
+    headers = {
+        'Content-Type': f'multipart/form-data; boundary={boundary}',
+        'Content-Length': str(len(body))
+    }
+
+    req = urllib.request.Request(url, data=body, headers=headers)
+    try:
+        with urllib.request.urlopen(req) as resp:
+            return json.loads(resp.read().decode('utf-8'))
+    except Exception as e:
+        print(f"Error enviando foto: {e}")
+        return None
+
+
+def generar_grafica_historial(historia: dict) -> bytes:
+    """
+    Genera una grafica PNG con la evolucion de perdida y precision.
+    Retorna los bytes de la imagen.
+    """
+    try:
+        import matplotlib
+        matplotlib.use('Agg')  # Backend sin pantalla
+        import matplotlib.pyplot as plt
+
+        losses = historia.get('all_losses', [])
+        accs   = historia.get('all_accuracies', [])
+
+        if not losses:
+            return None
+
+        epocas = list(range(1, len(losses) + 1))
+
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(10, 4))
+        fig.patch.set_facecolor('#1a1a2e')
+
+        # -- Grafica de Perdida --
+        ax1.set_facecolor('#16213e')
+        ax1.plot(epocas, losses, color='#e94560', linewidth=2, label='Perdida')
+        ax1.set_title('Perdida por Ejecucion', color='white', fontsize=12, fontweight='bold')
+        ax1.set_xlabel('Ejecucion', color='#aaaaaa')
+        ax1.set_ylabel('Perdida (Cross-Entropy)', color='#aaaaaa')
+        ax1.tick_params(colors='#aaaaaa')
+        for spine in ax1.spines.values():
+            spine.set_edgecolor('#444444')
+        ax1.legend(facecolor='#1a1a2e', labelcolor='white', edgecolor='#444444')
+        ax1.grid(True, color='#333355', linestyle='--', alpha=0.5)
+
+        # -- Grafica de Precision --
+        ax2.set_facecolor('#16213e')
+        ax2.plot(epocas, [a * 100 for a in accs], color='#0f3460',
+                 linewidth=2, label='Precision', marker='o', markersize=4)
+        ax2.fill_between(epocas, [a * 100 for a in accs],
+                         alpha=0.3, color='#533483')
+        ax2.set_title('Precision por Ejecucion', color='white', fontsize=12, fontweight='bold')
+        ax2.set_xlabel('Ejecucion', color='#aaaaaa')
+        ax2.set_ylabel('Precision (%)', color='#aaaaaa')
+        ax2.tick_params(colors='#aaaaaa')
+        ax2.set_ylim(0, 100)
+        for spine in ax2.spines.values():
+            spine.set_edgecolor('#444444')
+        ax2.legend(facecolor='#1a1a2e', labelcolor='white', edgecolor='#444444')
+        ax2.grid(True, color='#333355', linestyle='--', alpha=0.5)
+
+        plt.tight_layout(pad=2.0)
+
+        # Guardar en buffer de bytes
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', dpi=120, bbox_inches='tight',
+                    facecolor=fig.get_facecolor())
+        plt.close(fig)
+        buf.seek(0)
+        return buf.read()
+
+    except ImportError:
+        print("matplotlib no disponible para generar graficas")
+        return None
+    except Exception as e:
+        print(f"Error generando grafica: {e}")
+        return None
 
 # ---------------------------------------------------------
 # PROCESAMIENTO DE COMANDOS
@@ -220,16 +333,16 @@ def manejar_comando(chat_id: int, texto: str):
     
     if texto.startswith('/start') or texto.startswith('/help'):
         ayuda = (
-            "🤖 Bot Red Neuronal ADA\n\n"
+            "Bot Red Neuronal ADA\n\n"
             "Soy un bot conectado a tu red neuronal y Proyecto de Algoritmos.\n\n"
             "Comandos disponibles:\n"
-            "/status - Ver estadisticas de la red neuronal\n"
-            "/entrenar <numero de epocas> - Entrena la red en el numero de epocas que desees\n"
-            "/predecir - Predice la clase pasando 20 numeros\n"
+            "/status      - Estadisticas + grafica de entrenamiento\n"
+            "/entrenar N  - Entrena la red N epocas\n"
+            "/predecir    - Predice la clase con 20 numeros\n"
             "/clasificar_digito - MLP vs k-NN con datos aleatorios\n"
-            "/ordenamiento - Heapsort vs Quicksort\n"
-            "/estructuras - Demostracion Quickselect Top-K y BST\n"
-            "/complejidad - Analisis estatico Big-O de tu codigo\n"
+            "/ordenamiento      - Heapsort vs Quicksort\n"
+            "/estructuras       - Quickselect Top-K y BST\n"
+            "/complejidad       - Analisis Big-O de tu codigo\n"
         )
         enviar_mensaje(chat_id, ayuda)
         
@@ -245,16 +358,34 @@ def manejar_comando(chat_id: int, texto: str):
         total_ejecuciones = historia.get('total_executions', 0)
         ultima_perdida = historia['all_losses'][-1] if historia.get('all_losses') else historia.get('final_loss', 0)
         ultima_precision = historia['all_accuracies'][-1] if historia.get('all_accuracies') else historia.get('final_accuracy', 0)
+
+        # Tendencia (ultima ejecucion vs penultima)
+        tendencia_loss = ""
+        tendencia_acc  = ""
+        all_losses = historia.get('all_losses', [])
+        all_accs   = historia.get('all_accuracies', [])
+        if len(all_losses) >= 2:
+            delta_l = all_losses[-1] - all_losses[-2]
+            delta_a = all_accs[-1] - all_accs[-2]
+            tendencia_loss = f"  ({'↓' if delta_l < 0 else '↑'} {abs(delta_l):.4f})"
+            tendencia_acc  = f"  ({'↑' if delta_a > 0 else '↓'} {abs(delta_a)*100:.2f}%)"
         
         estado = (
-            f"📊 *Estado de la Red Neuronal*\n"
-            f"• Total de ejecuciones: {total_ejecuciones}\n"
+            f"📊 Estado de la Red Neuronal\n\n"
+            f"• Ejecuciones completadas: {total_ejecuciones}\n"
             f"• Epocas totales entrenadas: {total_epocas}\n"
-            f"• Ultima perdida: {ultima_perdida:.4f}\n"
-            f"• Ultima precision: {ultima_precision*100:.2f}%\n"
-            f"• Arquitectura: 1 Capa Oculta (4 Neuronas)\n"
+            f"• Ultima perdida: {ultima_perdida:.4f}{tendencia_loss}\n"
+            f"• Ultima precision: {ultima_precision*100:.2f}%{tendencia_acc}\n"
         )
         enviar_mensaje(chat_id, estado)
+
+        # Enviar grafica si hay suficientes datos
+        if len(all_losses) >= 2:
+            img = generar_grafica_historial(historia)
+            if img:
+                enviar_foto(chat_id, img, caption="Evolucion del entrenamiento")
+            else:
+                enviar_mensaje(chat_id, "(Instala matplotlib para ver graficas: pip install matplotlib)")
         
     elif texto.startswith('/entrenar'):
         # Extraer el numero de epocas
@@ -306,12 +437,20 @@ def manejar_comando(chat_id: int, texto: str):
 
             
         enviar_mensaje(chat_id, 
-            f"✅ *Entrenamiento finalizado*\n\n"
-            f"📈 Precision actual: {acc_final*100:.2f}%\n"
-            f"📉 Perdida final: {perdida_final:.4f}\n"
-            f"⏳ *Total acumulado de epocas:* {total_epochs}\n\n"
+            f"Entrenamiento finalizado\n\n"
+            f"Precision actual: {acc_final*100:.2f}%\n"
+            f"Perdida final: {perdida_final:.4f}\n"
+            f"Total acumulado de epocas: {total_epochs}\n\n"
             f"Memoria de la red guardada correctamente en disco."
         )
+
+        # Grafica actualizada tras el entrenamiento
+        if os.path.exists(HISTORY_PATH):
+            with open(HISTORY_PATH, 'r') as f:
+                historia_act = json.load(f)
+            img = generar_grafica_historial(historia_act)
+            if img:
+                enviar_foto(chat_id, img, caption=f"Progreso tras {total_epochs} epocas")
 
     elif texto.startswith('/predecir'):
         argumentos = texto[len('/predecir'):].strip()
@@ -349,40 +488,48 @@ def manejar_comando(chat_id: int, texto: str):
         enviar_mensaje(chat_id, 
             f"🧠 *Resultado de la Prediccion*\n"
             f"• Clase predicha: {clase_predicha} (de 10)\n"
-            f"• Nivel de confianza: {confianza:.2f}%\n\n"
-            f"(Nota: La red analizo el vector a traves de su capa oculta de 4 neuronas para este resultado)."
+            f"• Nivel de confianza: {confianza:.2f}%\n"
         )
 
     elif texto.startswith('/clasificar_digito'):
         import random
-        enviar_mensaje(chat_id, "Generando digito aleatorio y ejecutando modelos...")
+        enviar_mensaje(chat_id, "Generando digitos aleatorios y ejecutando modelos...")
+        
         # Simular una imagen 8x8 aplanada (64 features), simplificado a 20 features para usar el MLP instanciado
         X, y = DatasetGenerator.generate_mnist_like(num_samples=10, num_classes=5, img_size=5, seed=random.randint(1,1000))
-        # MLP de 25 features (5x5). Instanciamos un MLP especifico para la prueba
+        
+        inicializar_modelo()
+        # El modelo mlp_bot ya esta inicializado con (20, 4, 10). Las muestras generadas tienen 25 features.
+        # Necesitamos instanciar un modelo para las muestras de 25 features de generate_mnist_like
+        # Pero podemos cargarle los pesos si la arquitectura coincide, lo cual no pasa aqui (20 vs 25).
+        # Por lo que para la comparativa MNIST-like instanciamos uno nuevo, o usamos la logica original adaptada.
+        
         mlp_temp = MLP([25, 4, 5], ['relu', 'linear'], 'cross_entropy')
         mlp_temp.train_epoch(X, y, 10, 0.1) # Entrenamiento rapido minimo
         
-        muestra_idx = random.randint(0, 9)
-        muestra = Matrix(1, 25, [X.data[muestra_idx]])
-        target_clase = y.data[muestra_idx].index(1)
-        
-        # Prediccion MLP
-        pred_mlp = mlp_temp.forward(muestra).data[0]
-        clase_mlp = pred_mlp.index(max(pred_mlp))
-        
-        # Prediccion KNN (k=1)
         knn = KNNClassifier(k=1)
         knn.fit(X, y)
-        pred_knn = knn.predict(muestra)
-        clase_knn = pred_knn[0]
         
-        msj = (
-            f"🖼️ *Carrera de Clasificacion de Digitos*\n"
-            f"• Clase real del digito: {target_clase}\n\n"
-            f"🤖 *MLP (Red Neuronal)*: {clase_mlp}\n"
-            f"📐 *k-NN (Vecinos)*: {clase_knn}\n\n"
-            f"(Generalmente k-NN = 1 es infalible si la muestra esta en los datos de entrenamiento)"
-        )
+        msj = f"🖼️ *Carrera de Clasificacion de Digitos (3 Pruebas)*\n\n"
+        
+        for i in range(3):
+            muestra_idx = random.randint(0, 9)
+            muestra = Matrix(1, 25, [X.data[muestra_idx]])
+            target_clase = y.data[muestra_idx].index(1)
+            
+            # Prediccion MLP
+            pred_mlp = mlp_temp.forward(muestra).data[0]
+            clase_mlp = pred_mlp.index(max(pred_mlp))
+            
+            # Prediccion KNN (k=1)
+            pred_knn = knn.predict(muestra)
+            clase_knn = pred_knn[0]
+            
+            msj += f"Prueba {i+1}:\n"
+            msj += f"• Clase real: {target_clase}\n"
+            msj += f"🤖 MLP: {clase_mlp} | 📐 k-NN: {clase_knn}\n\n"
+            
+        msj += f"(Generalmente k-NN = 1 es infalible si la muestra esta en los datos de entrenamiento)"
         enviar_mensaje(chat_id, msj)
 
     elif texto.startswith('/ordenamiento'):
@@ -421,9 +568,25 @@ def manejar_comando(chat_id: int, texto: str):
         
         # BST
         bst = BST()
-        bst.insert(0.5, 0, 0, 0)
-        bst.insert(0.1, 0, 0, 1)
-        bst.insert(0.8, 0, 1, 0)
+        # Insertamos varios valores para que el arbol se vea interesante
+        for v in [0.5, 0.2, 0.8, 0.1, 0.3, 0.7, 0.9]:
+            bst.insert(v, 0, 0, 0)
+            
+        def generar_arbol_ascii(node, prefix='', is_left=True, is_root=True):
+            if not node:
+                return ''
+            res = ''
+            if node.right:
+                res += generar_arbol_ascii(node.right, prefix + ('│   ' if is_left and not is_root else '    '), False, False)
+            if is_root:
+                res += f'{node.magnitude:.2f}\n'
+            else:
+                res += prefix + ('└── ' if is_left else '┌── ') + f'{node.magnitude:.2f}\n'
+            if node.left:
+                res += generar_arbol_ascii(node.left, prefix + ('    ' if is_left or is_root else '│   '), True, False)
+            return res
+            
+        arbol_str = generar_arbol_ascii(bst.root)
         
         msj = (
             f"⚙️ *Estructuras de Datos*\n\n"
@@ -431,11 +594,14 @@ def manejar_comando(chat_id: int, texto: str):
             f"Se buscaron las 3 peores perdidas de 500 muestras en tiempo O(n):\n"
             f"Top 3 perdidas: {top_k_vals[0]:.2f}, {top_k_vals[1]:.2f}, {top_k_vals[2]:.2f}\n\n"
             f"🌲 *Árbol Binario (BST) para Poda*\n"
-            f"Se instancio un arbol y se inserto la memoria de 3 conexiones.\n"
-            f"• Menor valor de memoria en O(log n): {bst.find_min().magnitude:.2f}\n"
-            f"• Mayor valor de memoria en O(log n): {bst.find_max().magnitude:.2f}\n"
+            f"Se instancio un arbol y se insertaron pesos por magnitud:\n"
+            f"• Menor valor en O(log n): {bst.find_min().magnitude:.2f}\n"
+            f"• Mayor valor en O(log n): {bst.find_max().magnitude:.2f}\n\n"
+            f"Estructura del arbol en memoria:\n"
+            f"<pre>\n{arbol_str}</pre>"
         )
-        enviar_mensaje(chat_id, msj)
+        # Hacemos la peticion con parse_mode HTML para que respete el monospace del arbol
+        hacer_peticion("sendMessage", {"chat_id": chat_id, "text": msj, "parse_mode": "HTML"})
 
     elif texto.startswith('/complejidad'):
         esperando_codigo[chat_id] = True
